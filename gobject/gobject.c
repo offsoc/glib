@@ -124,7 +124,7 @@ enum {
  * parallel as possible. The alternative would be to add individual locking
  * integers to GObjectPrivate. But increasing memory usage for more parallelism
  * (per-object!) is not worth it. */
-#define OPTIONAL_BIT_LOCK_TOGGLE_REFS 1
+#define OPTIONAL_BIT_LOCK_UNUSED 1
 
 #if SIZEOF_INT == 4 && GLIB_SIZEOF_VOID_P >= 8
 #define HAVE_OPTIONAL_FLAGS_IN_GOBJECT 1
@@ -625,7 +625,7 @@ weak_ref_data_has (GObject *object, WeakRefData *wrdata, WeakRefData **out_new_w
 static G_THREAD_LOCAL guint _object_bit_is_locked;
 #endif
 
-static void
+G_GNUC_UNUSED static void
 object_bit_lock (GObject *object, guint lock_bit)
 {
 #if defined(G_ENABLE_DEBUG) && defined(G_THREAD_LOCAL)
@@ -640,7 +640,7 @@ object_bit_lock (GObject *object, guint lock_bit)
   g_bit_lock ((gint *) object_get_optional_flags_p (object), _OPTIONAL_BIT_LOCK);
 }
 
-static void
+G_GNUC_UNUSED static void
 object_bit_unlock (GObject *object, guint lock_bit)
 {
 #if defined(G_ENABLE_DEBUG) && defined(G_THREAD_LOCAL)
@@ -4147,8 +4147,6 @@ toggle_refs_check_and_ref_or_deref (GObject *object,
   *toggle_notify = NULL;
   *toggle_data = NULL;
 
-  object_bit_lock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
-
   /* This is called from g_object_ref()/g_object_unref() and a hot path.
    *
    * We hack the GData open and take the g_datalist_lock() outside. Then we
@@ -4182,7 +4180,6 @@ toggle_refs_check_and_ref_or_deref (GObject *object,
   if (G_UNLIKELY (!success))
     {
       g_datalist_unlock (&object->qdata);
-      object_bit_unlock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
       return FALSE;
     }
 
@@ -4190,7 +4187,6 @@ toggle_refs_check_and_ref_or_deref (GObject *object,
     {
       /* We have no toggle ref set. We are done. */
       g_datalist_unlock (&object->qdata);
-      object_bit_unlock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
       *toggle_notify = NULL;
       return TRUE;
     }
@@ -4204,7 +4200,6 @@ toggle_refs_check_and_ref_or_deref (GObject *object,
                                      toggle_refs_check_and_ref_cb,
                                      (gpointer[2]){ toggle_notify, toggle_data });
 
-  object_bit_unlock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
   return TRUE;
 }
 
@@ -4297,8 +4292,6 @@ g_object_add_toggle_ref (GObject *object,
 
   g_object_ref (object);
 
-  object_bit_lock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
-
   _g_datalist_id_update_atomic (&object->qdata,
                                 quark_toggle_refs,
                                 toggle_refs_ref_cb,
@@ -4307,8 +4300,6 @@ g_object_add_toggle_ref (GObject *object,
                                     .tuple.notify = notify,
                                     .tuple.data = data,
                                 }));
-
-  object_bit_unlock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
 }
 
 static gpointer
@@ -4376,8 +4367,6 @@ g_object_remove_toggle_ref (GObject *object,
   g_return_if_fail (G_IS_OBJECT (object));
   g_return_if_fail (notify != NULL);
 
-  object_bit_lock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
-
   result = _g_datalist_id_update_atomic (&object->qdata,
                                          quark_toggle_refs,
                                          toggle_refs_unref_cb,
@@ -4386,8 +4375,6 @@ g_object_remove_toggle_ref (GObject *object,
                                              .tuple.notify = notify,
                                              .tuple.data = data,
                                          }));
-
-  object_bit_unlock (object, OPTIONAL_BIT_LOCK_TOGGLE_REFS);
 
   if (!GPOINTER_TO_INT (result))
     {
