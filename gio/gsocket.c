@@ -30,6 +30,7 @@
 #include "config.h"
 
 #include "gsocket.h"
+#include "glib-private.h"
 
 #ifdef G_OS_UNIX
 #include "glib-unix.h"
@@ -4369,6 +4370,10 @@ socket_source_new (GSocket      *socket,
       GSource *cancellable_source;
 
       cancellable_source = g_cancellable_source_new (cancellable);
+      /* FIXME: The cancellable source may not be ever released, see:
+       *  - https://gitlab.gnome.org/GNOME/glib/-/issues/2309
+       */
+      g_ignore_leak (cancellable_source);
       g_source_add_child_source (source, cancellable_source);
       g_source_set_dummy_callback (cancellable_source);
       g_source_unref (cancellable_source);
