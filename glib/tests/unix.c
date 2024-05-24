@@ -161,6 +161,7 @@ test_closefrom (void)
             }
         }
 
+      g_free (fds);
       _exit (0);
     }
 
